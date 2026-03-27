@@ -1,6 +1,11 @@
 import yfinance as yf
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from newsapi import NewsApiClient
+from dotenv import load_dotenv
+import os
+load_dotenv()
+api_key = os.getenv("NEWS_API_KEY")
 
 stock = input("Enter stock symbol : ")
 
@@ -50,7 +55,29 @@ else:
         trend = "Strong Downtrend "
     else:
         trend = "Sideways Trend "
-    print(f"\nInsight: Stock has {movement} over the selected period with {risk} and a {trend}.")
+    print(f"\nInsight: The stock has {movement} over the selected period, showing {trend.lower()} with {risk.lower()}.")
+
+    # Fetch news
+    newsapi =NewsApiClient(api_key="api_key")
+    company =stock.split('.')[0]
+    articles = newsapi.get_everything(
+        q=f"{company} stock India OR {company} earnings OR {company} results",
+        language='en',sort_by='relevancy',page_size=3)
+    print("\n Latest News:")
+    print("\n📰 Relevant News:")
+
+    keywords = ["stock", "shares", "earnings", "results", "market", "revenue"]
+    for article in articles['articles']:
+        title = article['title'].lower()
+        if company.lower() in title and any(word in title for word in keywords):
+            print("-", article['title'])
+
+# Simple AI-style explanation
+    if percent_change > 0:
+        reason = "positive sentiment or strong performance"
+    else:
+        reason = "negative sentiment or weak performance"
+    print(f"\nAI Explanation: The stock movement may be due to {reason},as reflected in recent news trends.\n")
 
 #Ploting Graph
     plt.figure()
