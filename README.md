@@ -34,12 +34,12 @@ FinScope addresses this gap by providing an integrated system that not only anal
 
 * Fetches real-time stock data using Yahoo Finance
 * Displays price trends with graphs
-* Calculates moving averages for trend analysis
-* Detects trend (Uptrend / Downtrend / Sideways)
+* Calculates moving averages for trend analysis and detects trend (Uptrend / Downtrend / Sideways)
 * Computes percentage change over time
-* Measures volatility (risk level classification)
+* Measures volatility as risk level classification
 * Fetches relevant financial news
 * Generates AI-style explanations for stock movement
+* Performs sentiment analysis on financial news using NLP (TextBlob)
 
 ## Flow of Code
 1. User inputs stock symbol (e.g., `TCS.NS`)

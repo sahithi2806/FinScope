@@ -84,18 +84,27 @@ else:
                 blob = TextBlob(title)
                 polarity = blob.sentiment.polarity
                 sentiments.append(polarity)
-    if sentiments:
-        avg_sentiment = sum(sentiments) / len(sentiments)
-    else:
-        avg_sentiment = 0            
-    if avg_sentiment > 0:
-        sentiment_label = "Positive 😊"
-    elif avg_sentiment < 0:
-        sentiment_label = "Negative 😡"
-    else:
-        sentiment_label = "Neutral 😐"
+    if sentiments: 
+        avg_sentiment = sum(sentiments) / len(sentiments) 
+    else: 
+        avg_sentiment = 0
+    explanation = f"The stock has {movement} over the selected period, showing a {trend.lower()} with {risk.lower()}."
 
-    print(f"\nNews Sentiment: {sentiment_label}")
+    # sentiment reasoning
+    if avg_sentiment > 0:
+        explanation += " Recent news sentiment is positive, indicating optimistic market signals."
+    elif avg_sentiment < 0:
+        explanation += " Recent news sentiment is negative, indicating cautious or weak market outlook."
+    else:
+        explanation += " News sentiment is neutral, suggesting no strong external influence."
+
+    # deeper reasoning
+    if trend == "Uptrend" and percent_change < 0:
+        explanation += " This may indicate a potential recovery phase."
+    elif trend == "Downtrend" and percent_change > 0:
+        explanation += " This may indicate a possible reversal or instability."
+
+    print(f"\nAI Explanation:\n{explanation}")
 
 # Simple AI-style explanation
     if avg_sentiment > 0:
