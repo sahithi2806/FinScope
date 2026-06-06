@@ -5,128 +5,111 @@ from newsapi import NewsApiClient
 from dotenv import load_dotenv
 from textblob import TextBlob
 import os
+from groq import Groq  # Switched from google.genai
+
+# Load environment variables
 load_dotenv()
-api_key = os.getenv("NEWS_API_KEY")
+# Initialize Groq Client
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+news_api_key = os.getenv("NEWS_API_KEY")
 
-stock = input("Enter stock symbol : ")
-
+stock = input("Enter stock symbol : ").upper()
 data = yf.Ticker(stock)
 hist = data.history(period="3mo")
 
 if hist.empty:
     print(" Invalid stock symbol or no data found.")
 else:
+    # ---------------- STOCK SUMMARY ----------------
     latest_price = hist["Close"].iloc[-1]
     highest_price = hist["High"].max()
     lowest_price = hist["Low"].min()
 
-    print("\n Stock Summary:\n")
-    print("Stock:", stock)
-    print("Latest Price: ₹", round(latest_price, 2))
-    print("Highest Price : ₹", round(highest_price, 2))
-    print("Lowest Price : ₹", round(lowest_price, 2))
+    print(f"\n Stock Summary: {stock}\n" + "-"*20)
+    print(f"Latest Price: ₹{round(latest_price, 2)}")
+    print(f"Highest Price: ₹{round(highest_price, 2)}")
+    print(f"Lowest Price: ₹{round(lowest_price, 2)}")
 
-    #percentage change
+    # ---------------- PERCENTAGE CHANGE ----------------
     start_price = hist["Close"].iloc[0]
-    end_price = hist["Close"].iloc[-1]
-    percent_change = ((end_price - start_price) / start_price) * 100
+    percent_change = ((latest_price - start_price) / start_price) * 100
+    movement = "increased" if percent_change > 0 else "decreased"
     print(f"Percentage Change: {percent_change:.2f}%")
 
-    if percent_change > 0:
-        movement = "increased "
-    else:
-        movement = "decreased "
-    
-    #volatility-how unstable stock is
+    # ---------------- VOLATILITY ----------------
     volatility = hist["Close"].pct_change().std() * 100
-    if volatility > 3:
-        risk ="High Risk"
-    elif volatility > 1:
-        risk ="Moderate Risk"
-    else:
-        risk ="Low Risk"
+    risk = "High Risk" if volatility > 3 else "Moderate Risk" if volatility > 1 else "Low Risk"
     print(f"Volatility: {volatility:.2f} ({risk})")
 
+    # ---------------- TREND ----------------
     hist["MA"] = hist["Close"].rolling(window=5).mean()
-    recent_ma = hist["MA"].iloc[-5:]
-    if hist["MA"].iloc[-1] >hist["MA"].iloc[-5]:
+    if hist["MA"].iloc[-1] > hist["MA"].iloc[-5]:
         trend = "Uptrend"
-    elif hist["MA"].iloc[-1] <hist["MA"].iloc[-5]:
+    elif hist["MA"].iloc[-1] < hist["MA"].iloc[-5]:
         trend = "Downtrend"
     else:
         trend = "Sideways"
-    print(f"\nInsight: The stock has {movement} over the selected period, showing {trend.lower()} with {risk.lower()}.")
+    print(f"Insight: {movement.capitalize()} over 3 months, showing {trend.lower()}.")
 
-    # Fetch news
-    newsapi =NewsApiClient(api_key=api_key)
-    company =stock.split('.')[0]
+    # ---------------- NEWS ----------------
+    newsapi = NewsApiClient(api_key=news_api_key)
+    company = stock.split('.')[0]
     articles = newsapi.get_everything(
-        q=f"{company} stock India OR {company} earnings OR {company} results",
-        language='en',sort_by='relevancy',page_size=3)
-
-    keywords = ["stock", "shares", "earnings", "results", "market", "revenue"]
+        q=f"{company} stock OR {company} earnings",
+        language='en',
+        sort_by='relevancy',
+        page_size=3
+    )
+    
     sentiments = []
-    print("\n Relevant News:")
-
-    seen = set()
+    news_titles = []
+    print("\n📰 Relevant News:")
     for article in articles['articles']:
         title = article['title']
-        title_lower = title.lower().strip()
+        print("-", title)
+        news_titles.append(title)
+        blob = TextBlob(title)
+        sentiments.append(blob.sentiment.polarity)
 
-        # take first 8 words as key
-        key = " ".join(title_lower.split()[:5])
-        if key not in seen:
-            seen.add(key)
+    # ---------------- SENTIMENT ----------------
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+    sentiment_label = "Positive" if avg_sentiment > 0 else "Negative" if avg_sentiment < 0 else "Neutral"
+    print(f"\nNews Sentiment: {sentiment_label}")
 
-            if company.lower() in title_lower or any(word in title_lower for word in keywords):
-                print("-", title)
+    # ---------------- RULE-BASED EXPLANATION ----------------
+    explanation = f"The stock has {movement} recently. "
+    explanation += f"News is {sentiment_label.lower()}, suggesting {('optimism' if avg_sentiment > 0 else 'caution')}."
 
-                blob = TextBlob(title)
-                polarity = blob.sentiment.polarity
-                sentiments.append(polarity)
-    if sentiments: 
-        avg_sentiment = sum(sentiments) / len(sentiments) 
-    else: 
-        avg_sentiment = 0
-    explanation = f"The stock has {movement} over the selected period, showing a {trend.lower()} with {risk.lower()}."
+    # ---------------- GROQ AI (FREE REPLACEMENT) ----------------
+    news_context = ", ".join(news_titles[:2]) if news_titles else "No major news"
+    
+    prompt = f"""
+    Analyze {stock} stock.
+    Current Trend: {trend}
+    Volatility: {risk}
+    Change: {percent_change:.2f}%
+    News Context: {news_context}
+    
+    Provide a practical 3-line explanation for a beginner. No jargon.
+    """
 
-    # sentiment reasoning
-    if avg_sentiment > 0:
-        explanation += " Recent news sentiment is positive, indicating optimistic market signals."
-    elif avg_sentiment < 0:
-        explanation += " Recent news sentiment is negative, indicating cautious or weak market outlook."
-    else:
-        explanation += " News sentiment is neutral, suggesting no strong external influence."
+    print("\n" + "="*30)
+    print("Groq AI Explanation:")
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        print(completion.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"AI Limit reached. Using Rule-Based: {explanation}")
 
-    # deeper reasoning
-    if trend == "Uptrend" and percent_change < 0:
-        explanation += " This may indicate a potential recovery phase."
-    elif trend == "Downtrend" and percent_change > 0:
-        explanation += " This may indicate a possible reversal or instability."
-
-    print(f"\nAI Explanation:\n{explanation}")
-
-# Simple AI-style explanation
-    if avg_sentiment > 0:
-        reason = "positive news sentiment and favorable market signals"
-    elif avg_sentiment < 0:
-        reason = "negative news sentiment and weak performance signals"
-    else:
-        reason = "mixed or neutral market signals"
-    print(f"\nAI Explanation: The stock movement may be influenced by {reason}.")
-
-#Ploting Graph
-    plt.figure()
-    plt.plot(hist.index, hist["Close"], label="Price")
-    plt.plot(hist.index, hist["MA"], label="5-Day MA")
-
-    plt.title(f"{stock} Price + Moving Average")
-    plt.xlabel("Date")
-    plt.ylabel("Price")
-
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%b-%y'))
-    plt.xticks(rotation=45)
-
+    # ---------------- GRAPH ----------------
+    plt.figure(figsize=(10, 5))
+    plt.plot(hist.index, hist["Close"], label="Price", color='blue')
+    plt.plot(hist.index, hist["MA"], label="5-Day MA", color='orange', linestyle='--')
+    plt.title(f"{stock} Analysis (3 Months)")
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
     plt.legend()
     plt.tight_layout()
     plt.show()

@@ -1,0 +1,6 @@
+yfinance
+matplotlib
+newsapi-python
+python-dotenv
+textblob
+streamlit
